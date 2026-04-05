@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -26,7 +27,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-v4o2ll@h&tru$gi41cu#ia6n0+e%!197bz_1@$fg7dzt=gjn8l')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
+ON_RENDER = os.environ.get('RENDER', '').lower() == 'true'
+DEBUG = os.environ.get('DEBUG', 'False' if ON_RENDER else 'True').lower() == 'true'
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.onrender.com']
 
@@ -99,8 +101,12 @@ DATABASES = {
     }
 }
 
+database_url = os.environ.get('DATABASE_URL')
+if ON_RENDER and not database_url:
+    raise ImproperlyConfigured('DATABASE_URL must be set on Render. Create and attach a PostgreSQL database.')
+
 DATABASES['default'] = dj_database_url.config(
-    default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+    default=database_url or f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
     conn_max_age=600,
 )
 

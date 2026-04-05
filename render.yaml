@@ -3,9 +3,11 @@ services:
     name: pos-system
     env: python
     plan: free
-    buildCommand: ./build.sh
-    startCommand: gunicorn pos_system.wsgi:application
+    buildCommand: bash build.sh
+    startCommand: python manage.py migrate --noinput && gunicorn pos_system.wsgi:application
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
