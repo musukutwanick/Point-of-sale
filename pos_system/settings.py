@@ -28,6 +28,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-v4o2ll@h&tru$gi41cu#i
 
 # SECURITY WARNING: don't run with debug turned on in production!
 ON_RENDER = os.environ.get('RENDER', '').lower() == 'true'
+USE_SQLITE = os.environ.get('USE_SQLITE', 'False').lower() == 'true'
 DEBUG = os.environ.get('DEBUG', 'False' if ON_RENDER else 'True').lower() == 'true'
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.onrender.com']
@@ -94,21 +95,26 @@ WSGI_APPLICATION = 'pos_system.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
-
 database_url = os.environ.get('DATABASE_URL')
-if ON_RENDER and not database_url:
-    raise ImproperlyConfigured('DATABASE_URL must be set on Render. Create and attach a PostgreSQL database.')
+sqlite_path = os.environ.get('SQLITE_PATH', str(BASE_DIR / 'db.sqlite3'))
 
-DATABASES['default'] = dj_database_url.config(
-    default=database_url or f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-    conn_max_age=600,
-)
+if ON_RENDER and not USE_SQLITE and not database_url:
+    raise ImproperlyConfigured('DATABASE_URL must be set on Render unless USE_SQLITE=True.')
+
+if USE_SQLITE:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': sqlite_path,
+        }
+    }
+else:
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=database_url or f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+            conn_max_age=600,
+        )
+    }
 
 
 # Password validation
