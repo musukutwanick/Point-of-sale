@@ -1,0 +1,53 @@
+{% extends 'core/base.html' %}
+{% block title %}Changes | POS{% endblock %}
+{% block content %}
+<div class="flex items-center gap-3 mb-6">
+    <a href="{% url 'new_sale' %}" class="px-3 py-1 rounded bg-slate-600 text-white text-sm hover:bg-slate-500">← Back</a>
+    <h1 class="text-2xl font-semibold">Outstanding Changes</h1>
+</div>
+
+<div class="space-y-3">
+    {% for tx in transactions %}
+        <div class="bg-white rounded-lg shadow p-3">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <!-- Left: Transaction & Customer Info -->
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-baseline gap-2 mb-1">
+                        <p class="font-semibold text-lg">Tx #{{ tx.id }}</p>
+                        <p class="text-xs text-slate-500">{{ tx.created_at|date:"M d, H:i" }}</p>
+                    </div>
+                    <p class="text-sm text-slate-700"><span class="font-semibold">{{ tx.customer_name|default:"(No name)" }}</span> • {{ tx.seller.username }} • {{ tx.get_payment_method_display }}</p>
+                </div>
+
+                <!-- Middle: Change Summary -->
+                <div class="flex gap-4 text-sm">
+                    <div class="text-center">
+                        <p class="text-xs text-slate-500">Due</p>
+                        <p class="font-semibold">$ {{ tx.change_due }}</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-xs text-slate-500">Given</p>
+                        <p class="font-semibold">$ {{ tx.change_given }}</p>
+                    </div>
+                    <div class="text-center bg-orange-50 px-2 py-1 rounded">
+                        <p class="text-xs text-slate-500">Remaining</p>
+                        <p class="font-bold text-orange-600">$ {{ tx.change_not_given }}</p>
+                    </div>
+                </div>
+
+                <!-- Right: Collect Form -->
+                <form method="post" class="flex gap-1 items-end">
+                    {% csrf_token %}
+                    <input type="hidden" name="transaction_id" value="{{ tx.id }}">
+                    <input type="number" name="amount_collected" min="0.01" step="0.01" value="{{ tx.change_not_given }}" class="w-24 rounded border px-2 py-1 text-sm" required>
+                    <button class="bg-green-600 text-white rounded px-3 py-1 text-sm hover:bg-green-500 whitespace-nowrap">Collect</button>
+                </form>
+            </div>
+        </div>
+    {% empty %}
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center text-slate-600">
+            <p class="text-sm">No outstanding changes.</p>
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}

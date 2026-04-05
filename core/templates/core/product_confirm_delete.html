@@ -1,0 +1,13 @@
+{% extends 'core/base.html' %}
+{% block title %}Delete Product | POS{% endblock %}
+{% block content %}
+<div class="max-w-lg mx-auto bg-white rounded-lg shadow p-6">
+    <h1 class="text-xl font-semibold mb-4">Delete Product</h1>
+    <p class="mb-4">Are you sure you want to delete <strong>{{ product.name }}</strong>?</p>
+    <form method="post" class="flex gap-2">
+        {% csrf_token %}
+        <button class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-500">Delete</button>
+        <a href="{% url 'product_list' %}" class="bg-slate-300 px-4 py-2 rounded">Cancel</a>
+    </form>
+</div>
+{% endblock %}

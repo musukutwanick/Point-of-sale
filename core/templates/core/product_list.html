@@ -1,0 +1,38 @@
+{% extends 'core/base.html' %}
+{% block title %}Products | POS{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <h1 class="text-2xl font-semibold">Products</h1>
+    <a href="{% url 'product_create' %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-500">Add Product</a>
+</div>
+
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="text-left border-b">
+                <th class="p-3">Name</th>
+                <th class="p-3">Price</th>
+                <th class="p-3">Stock</th>
+                <th class="p-3">Low Stock At</th>
+                <th class="p-3">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in products %}
+                <tr class="border-b">
+                    <td class="p-3">{{ product.name }}</td>
+                    <td class="p-3">{{ product.price }}</td>
+                    <td class="p-3 {% if product.is_low_stock %}text-red-600 font-semibold{% endif %}">{{ product.stock_quantity }}</td>
+                    <td class="p-3">{{ product.low_stock_threshold }}</td>
+                    <td class="p-3 flex gap-2">
+                        <a href="{% url 'product_update' product.id %}" class="px-3 py-1 rounded bg-amber-500 text-white">Edit</a>
+                        <a href="{% url 'product_delete' product.id %}" class="px-3 py-1 rounded bg-red-600 text-white">Delete</a>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="5" class="p-3 text-slate-500">No products found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

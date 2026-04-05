@@ -1,0 +1,51 @@
+{% extends 'core/base.html' %}
+{% block title %}Dashboard | POS{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-4">Admin Dashboard ({{ today }})</h1>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-slate-500">Total Sales Today</p>
+        <p class="text-2xl font-bold text-green-600">$ {{ total_sales }}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-slate-500">Transactions Today</p>
+        <p class="text-2xl font-bold text-blue-600">{{ transaction_count }}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-slate-500">Change Not Collected</p>
+        <p class="text-2xl font-bold text-orange-600">$ {{ outstanding_change }}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-slate-500">Low Stock Items</p>
+        <p class="text-2xl font-bold text-red-600">{{ low_stock_items|length }}</p>
+    </div>
+</div>
+
+<div class="bg-white rounded-lg shadow p-4">
+    <h2 class="text-lg font-semibold mb-3">Low Stock Warning</h2>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-left border-b">
+                    <th class="py-2">Product</th>
+                    <th class="py-2">Stock</th>
+                    <th class="py-2">Threshold</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in low_stock_items %}
+                    <tr class="border-b">
+                        <td class="py-2">{{ product.name }}</td>
+                        <td class="py-2 text-red-600 font-semibold">{{ product.stock_quantity }}</td>
+                        <td class="py-2">{{ product.low_stock_threshold }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="3" class="py-3 text-slate-500">No low stock items.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

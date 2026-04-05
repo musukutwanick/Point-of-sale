@@ -1,0 +1,12 @@
+{% extends 'core/base.html' %}
+{% block title %}Backup | POS{% endblock %}
+{% block content %}
+<div class="max-w-xl bg-white rounded-lg shadow p-6">
+    <h1 class="text-2xl font-semibold mb-3">Database Backup</h1>
+    <p class="text-sm text-slate-600 mb-4">Click below to manually save a local copy of your SQLite database.</p>
+    <form method="post">
+        {% csrf_token %}
+        <button class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-500">Create Backup</button>
+    </form>
+</div>
+{% endblock %}
