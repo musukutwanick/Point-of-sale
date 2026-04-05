@@ -1,0 +1,67 @@
+{% extends 'core/base.html' %}
+{% block title %}System Admin | POS{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between gap-3 mb-6">
+    <h1 class="text-2xl font-semibold">System Administrator Dashboard</h1>
+    <a href="{% url 'client_create' %}" class="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-500">Add Client Business</a>
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-slate-500">Total Clients</p>
+        <p class="text-2xl font-bold">{{ total_clients }}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-slate-500">Expired (Grace)</p>
+        <p class="text-2xl font-bold text-yellow-700">{{ expired_clients }}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-slate-500">Paused</p>
+        <p class="text-2xl font-bold text-red-700">{{ paused_clients }}</p>
+    </div>
+</div>
+
+<div class="bg-white rounded-lg shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="border-b text-left">
+                <th class="px-4 py-3">Business</th>
+                <th class="px-4 py-3">Start</th>
+                <th class="px-4 py-3">Months</th>
+                <th class="px-4 py-3">Expiry</th>
+                <th class="px-4 py-3">Status</th>
+                <th class="px-4 py-3">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for client in clients %}
+                <tr class="border-b">
+                    <td class="px-4 py-3 font-medium">{{ client.business_name }}</td>
+                    <td class="px-4 py-3">{{ client.subscription_start }}</td>
+                    <td class="px-4 py-3">{{ client.subscription_months }}</td>
+                    <td class="px-4 py-3">{{ client.subscription_end_date }}</td>
+                    <td class="px-4 py-3">
+                        {% if client.is_paused %}
+                            <span class="px-2 py-1 rounded bg-red-100 text-red-800 text-xs">Paused</span>
+                        {% elif client.is_expired %}
+                            <span class="px-2 py-1 rounded bg-yellow-100 text-yellow-800 text-xs">Expired (Grace)</span>
+                        {% else %}
+                            <span class="px-2 py-1 rounded bg-green-100 text-green-800 text-xs">Active</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="flex gap-2">
+                            <a href="{% url 'client_update' client.id %}" class="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-500">Edit</a>
+                            <a href="{% url 'client_delete' client.id %}" class="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-500">Delete</a>
+                        </div>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="6" class="px-4 py-4 text-slate-500">No clients added yet.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

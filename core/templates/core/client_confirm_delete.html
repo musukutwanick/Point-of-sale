@@ -1,0 +1,13 @@
+{% extends 'core/base.html' %}
+{% block title %}Delete Client | POS{% endblock %}
+{% block content %}
+<div class="max-w-xl bg-white rounded-lg shadow p-6">
+    <h1 class="text-2xl font-semibold mb-3">Delete Client Business</h1>
+    <p class="mb-4">Are you sure you want to delete <span class="font-semibold">{{ client.business_name }}</span>? This will also remove the linked admin and cashier accounts.</p>
+    <form method="post" class="flex gap-2">
+        {% csrf_token %}
+        <button class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-500">Delete</button>
+        <a href="{% url 'sysadmin_dashboard' %}" class="px-4 py-2 rounded bg-slate-600 text-white hover:bg-slate-500">Cancel</a>
+    </form>
+</div>
+{% endblock %}

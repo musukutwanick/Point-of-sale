@@ -1,0 +1,70 @@
+{% extends 'core/base.html' %}
+{% block title %}{{ title }} | POS{% endblock %}
+{% block content %}
+<div class="max-w-2xl bg-white rounded-lg shadow p-6">
+    <h1 class="text-2xl font-semibold mb-4">{{ title }}</h1>
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="px-4 py-3 rounded bg-red-100 text-red-800 text-sm">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <div>
+            <label class="block text-sm mb-1">Business Name</label>
+            {{ form.business_name }}
+            {% if form.business_name.errors %}<p class="text-xs text-red-600 mt-1">{{ form.business_name.errors|join:', ' }}</p>{% endif %}
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm mb-1">Subscription Start</label>
+                {{ form.subscription_start }}
+                {% if form.subscription_start.errors %}<p class="text-xs text-red-600 mt-1">{{ form.subscription_start.errors|join:', ' }}</p>{% endif %}
+            </div>
+            <div>
+                <label class="block text-sm mb-1">Subscription Months</label>
+                {{ form.subscription_months }}
+                {% if form.subscription_months.errors %}<p class="text-xs text-red-600 mt-1">{{ form.subscription_months.errors|join:', ' }}</p>{% endif %}
+            </div>
+        </div>
+
+        {% if form.admin_username %}
+            <h2 class="text-lg font-semibold pt-2">Admin Account</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm mb-1">Admin Username</label>
+                    {{ form.admin_username }}
+                    {% if form.admin_username.errors %}<p class="text-xs text-red-600 mt-1">{{ form.admin_username.errors|join:', ' }}</p>{% endif %}
+                </div>
+                <div>
+                    <label class="block text-sm mb-1">Admin Password</label>
+                    {{ form.admin_password }}
+                    {% if form.admin_password.errors %}<p class="text-xs text-red-600 mt-1">{{ form.admin_password.errors|join:', ' }}</p>{% endif %}
+                </div>
+            </div>
+
+            <h2 class="text-lg font-semibold pt-2">Cashier Account</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm mb-1">Cashier Username</label>
+                    {{ form.cashier_username }}
+                    {% if form.cashier_username.errors %}<p class="text-xs text-red-600 mt-1">{{ form.cashier_username.errors|join:', ' }}</p>{% endif %}
+                </div>
+                <div>
+                    <label class="block text-sm mb-1">Cashier Password</label>
+                    {{ form.cashier_password }}
+                    {% if form.cashier_password.errors %}<p class="text-xs text-red-600 mt-1">{{ form.cashier_password.errors|join:', ' }}</p>{% endif %}
+                </div>
+            </div>
+        {% endif %}
+
+        <div class="flex gap-2 pt-2">
+            <button class="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-500">Save</button>
+            <a href="{% url 'sysadmin_dashboard' %}" class="px-4 py-2 rounded bg-slate-600 text-white hover:bg-slate-500">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

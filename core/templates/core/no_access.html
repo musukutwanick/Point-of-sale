@@ -1,0 +1,10 @@
+{% extends 'core/base.html' %}
+{% block title %}No Access | POS{% endblock %}
+{% block content %}
+<div class="max-w-xl bg-white rounded-lg shadow p-6">
+    <h1 class="text-2xl font-semibold mb-2">No Access</h1>
+    <p class="text-slate-600 mb-4">Your account does not currently have a role assigned for this page.</p>
+    <a href="{% url 'logout' %}" onclick="event.preventDefault(); document.getElementById('logout-form').submit();" class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-500">Logout</a>
+    <form id="logout-form" method="post" action="{% url 'logout' %}" class="hidden">{% csrf_token %}</form>
+</div>
+{% endblock %}
