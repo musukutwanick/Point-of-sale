@@ -93,22 +93,15 @@ WSGI_APPLICATION = 'pos_system.wsgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'pos_db'),
-        'USER': os.environ.get('DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
-    }
+    'default': dj_database_url.config(
+        default='postgresql://pos_db_f2j2_user:pyRmfxWNoifxed5dyhhKWeFVlQjlYltp@dpg-d79tqi7pm1nc73d1u200-a.oregon-postgres.render.com/pos_db_f2j2'
+    )
 }
 
-if os.environ.get('DATABASE_URL'):
-    DATABASES['default'] = dj_database_url.parse(
-        os.environ['DATABASE_URL'],
-        conn_max_age=600,
-        ssl_require=ON_RENDER,
-    )
+DATABASES['default']['CONN_MAX_AGE'] = 600
+DATABASES['default']['OPTIONS'] = {
+    'sslmode': 'require',
+}
 
 
 # Password validation
