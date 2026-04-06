@@ -1,8 +1,8 @@
 def user_roles(request):
     user = request.user
     is_system_admin = user.is_authenticated and user.is_superuser
-    is_admin = user.is_authenticated and (user.is_superuser or user.groups.filter(name='Admin').exists())
-    is_seller = user.is_authenticated and (is_admin or user.groups.filter(name='Seller').exists())
+    is_admin = user.is_authenticated and (not user.is_superuser) and user.groups.filter(name='Admin').exists()
+    is_seller = user.is_authenticated and (not user.is_superuser) and (is_admin or user.groups.filter(name='Seller').exists())
 
     subscription_warning = None
     if user.is_authenticated and not user.is_superuser:

@@ -17,6 +17,7 @@ class ClientAccessMiddleware:
             '/logout',
             '/force-change-password',
             '/no-access',
+            '/account-deactivated',
         }
 
         if path in allowed_paths or path.startswith('/admin'):
@@ -30,6 +31,9 @@ class ClientAccessMiddleware:
             return redirect('force_change_password')
 
         client = profile.client
+        if client and not client.is_active:
+            return redirect('account_deactivated')
+
         if client and client.is_paused:
             return render(request, 'core/subscription_paused.html', {'client': client}, status=403)
 

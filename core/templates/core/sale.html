@@ -1,88 +1,190 @@
 {% extends 'core/base.html' %}
 {% block title %}New Sale | POS{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-semibold mb-4">New Sale</h1>
-
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    <div class="bg-white rounded-lg shadow p-4">
-        <h2 class="text-lg font-semibold mb-3">Find Product</h2>
-        <form method="get" class="mb-4">
-            <input type="text" name="q" value="{{ query }}" placeholder="Search product by name" class="w-full rounded border px-3 py-2">
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-4 h-screen">
+    <!-- Left Side: Product Grid -->
+    <div class="lg:col-span-3 flex flex-col bg-gray-50">
+        <!-- Search Bar -->
+        <form method="get" class="p-4 bg-white border-b">
+            <input type="text" name="q" value="{{ query }}" placeholder="Search products..." class="w-full rounded border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
         </form>
 
-        <div class="space-y-2 max-h-72 overflow-y-auto">
-            {% for product in products %}
-                <form method="post" class="border rounded p-3 grid grid-cols-1 sm:grid-cols-6 gap-2 items-end">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="add_item">
-                    <input type="hidden" name="product" value="{{ product.id }}">
-                    <div class="sm:col-span-3">
-                        <p class="font-medium">{{ product.name }}</p>
-                        <p class="text-sm text-slate-500">Price: $ {{ product.price }} | Stock: {{ product.stock_quantity }}</p>
-                    </div>
-                    <div class="sm:col-span-2">
-                        <label class="text-sm">Qty</label>
-                        <input type="number" name="quantity" min="1" value="1" class="w-full rounded border px-3 py-2">
-                    </div>
-                    <button class="sm:col-span-1 bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-500">Add</button>
-                </form>
-            {% empty %}
-                <p class="text-slate-500">No products found.</p>
-            {% endfor %}
+        <!-- Product Grid -->
+        <div class="flex-1 overflow-y-auto p-4">
+            {% if products %}
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    {% for product in products %}
+                        <form method="post" class="bg-white rounded-lg p-4 shadow hover:shadow-md transition cursor-pointer">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="add_item">
+                            <input type="hidden" name="product" value="{{ product.id }}">
+                            <input type="hidden" name="quantity" value="1">
+                            
+                            <!-- Product Name -->
+                            <h3 class="font-semibold text-sm mb-1 text-gray-800">{{ product.name }}</h3>
+                            
+                            <!-- Price -->
+                            <p class="text-lg font-bold text-gray-900 mb-2">${{ product.price }}</p>
+                            
+                            <!-- Stock Status -->
+                            <div class="mb-3">
+                                {% if product.stock_quantity > 20 %}
+                                    <p class="text-xs text-gray-600">{{ product.stock_quantity }} in stock</p>
+                                {% elif product.stock_quantity > 5 %}
+                                    <p class="text-xs text-yellow-600 font-medium">{{ product.stock_quantity }} in stock</p>
+                                {% else %}
+                                    <p class="text-xs text-red-600 font-medium">{{ product.stock_quantity }} in stock</p>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Add Button -->
+                            <button type="submit" class="w-full bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-500 font-medium">Add</button>
+                        </form>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="flex items-center justify-center h-full">
+                    <p class="text-gray-500 text-center">No products found</p>
+                </div>
+            {% endif %}
         </div>
     </div>
 
-    <div class="bg-white rounded-lg shadow p-4">
-        <h2 class="text-lg font-semibold mb-3">Current Cart</h2>
-        <div class="space-y-2 mb-4">
-            {% for item in cart_items %}
-                <div class="border rounded p-3 flex items-center justify-between gap-2">
-                    <div>
-                        <p class="font-medium">{{ item.product.name }}</p>
-                        <p class="text-sm text-slate-500">{{ item.quantity }} x $ {{ item.product.price }} = $ {{ item.line_total }}</p>
+    <!-- Right Side: Cart Sidebar -->
+    <div class="lg:col-span-2 bg-white rounded-lg shadow flex flex-col h-full">
+        <!-- Cart Header -->
+        <div class="border-b p-4">
+            <h2 class="text-lg font-bold">🛒 Cart</h2>
+            <p class="text-sm text-gray-600">{{ cart_items|length }} item{{ cart_items|pluralize }}</p>
+        </div>
+
+        <!-- Cart Items -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-2">
+            {% if cart_items %}
+                {% for item in cart_items %}
+                    <div class="border rounded p-3 bg-gray-50">
+                        <p class="font-medium text-sm text-gray-800">{{ item.product.name }}</p>
+                        <p class="text-xs text-gray-600 mb-2">${{ item.product.price }} × {{ item.quantity }}</p>
+                        
+                        <!-- Quantity Controls -->
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <div class="flex items-center gap-2 bg-white rounded border">
+                                <form method="post" action="{% url 'remove_sale_item' item.product.id %}" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="px-2 py-1 text-gray-600 hover:bg-gray-100 text-sm">−</button>
+                                </form>
+                                <span class="px-2 py-1 text-sm font-medium">{{ item.quantity }}</span>
+                                <form method="post" class="inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="add_item">
+                                    <input type="hidden" name="product" value="{{ item.product.id }}">
+                                    <input type="hidden" name="quantity" value="1">
+                                    <button type="submit" class="px-2 py-1 text-gray-600 hover:bg-gray-100 text-sm">+</button>
+                                </form>
+                            </div>
+                            <form method="post" action="{% url 'remove_sale_item' item.product.id %}" class="inline">
+                                {% csrf_token %}
+                                <button type="submit" class="text-red-600 hover:text-red-700 text-sm">🗑</button>
+                            </form>
+                        </div>
+                        
+                        <p class="font-semibold text-sm text-gray-900">${{ item.line_total }}</p>
                     </div>
-                    <form method="post" action="{% url 'remove_sale_item' item.product.id %}">
-                        {% csrf_token %}
-                        <button class="bg-red-600 text-white px-3 py-1 rounded">Remove</button>
-                    </form>
-                </div>
-            {% empty %}
-                <p class="text-slate-500">No items added yet.</p>
-            {% endfor %}
+                {% endfor %}
+            {% else %}
+                <p class="text-gray-500 text-sm text-center">No items</p>
+            {% endif %}
         </div>
 
-        <div class="border-t pt-3 mb-3">
-            <p class="text-lg font-semibold">Total: $ {{ cart_total }}</p>
-        </div>
+        <!-- Cart Summary -->
+        <div class="border-t p-4 space-y-3">
+            <!-- Total -->
+            <div class="flex justify-between items-center pb-3 border-b">
+                <span class="font-semibold text-gray-700">Total</span>
+                <span class="text-2xl font-bold text-gray-900">${{ cart_total }}</span>
+            </div>
 
-        <form method="post" action="{% url 'complete_sale' %}" class="space-y-3">
-            {% csrf_token %}
-            {{ checkout_form.payment_method }}
-            <div>
-                <label class="block text-sm mb-1">Payment Method</label>
-                <div class="grid grid-cols-2 gap-2">
-                    <button type="button" data-method="cash" class="payment-method-btn rounded border px-3 py-2 bg-blue-600 text-white border-blue-600">Cash</button>
-                    <button type="button" data-method="ecocash" class="payment-method-btn rounded border px-3 py-2 bg-white text-slate-700 border-slate-300">EcoCash</button>
+            <!-- Checkout Form -->
+            <form method="post" action="{% url 'complete_sale' %}" class="space-y-3">
+                {% csrf_token %}
+                <input type="hidden" id="id_payment_method" name="payment_method" value="cash">
+                <input type="hidden" id="id_use_change_customer" name="use_change_customer" value="">
+
+                <!-- Payment Method -->
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 mb-2">Payment Method</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" data-method="cash" class="payment-method-btn rounded border px-3 py-2 bg-blue-600 text-white border-blue-600 text-sm font-medium hover:bg-blue-700">Cash</button>
+                        <button type="button" data-method="ecocash" class="payment-method-btn rounded border px-3 py-2 bg-white text-gray-700 border-gray-300 text-sm font-medium hover:bg-gray-50">EcoCash</button>
+                    </div>
+                    <button type="button" id="open_use_change_modal" class="mt-2 text-xs text-blue-600 hover:text-blue-700 underline">Use change</button>
+                    <div id="use_change_status" class="mt-2 hidden text-xs rounded bg-green-50 text-green-700 px-2 py-1"></div>
+                    <div id="use_change_error" class="mt-2 hidden text-xs rounded bg-red-50 text-red-700 px-2 py-1"></div>
                 </div>
+
+                <!-- Amount Paid -->
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">Amount Paid</label>
+                    <input type="number" name="amount_paid" step="0.01" min="0" value="0.00" id="id_amount_paid" class="w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+
+                <!-- Change Due -->
+                <div class="bg-blue-50 p-2 rounded">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">Change Due (auto)</label>
+                    <input id="change_due_display" type="number" step="0.01" value="0.00" class="w-full rounded border px-3 py-2 text-sm bg-white font-semibold" readonly>
+                </div>
+
+                <!-- Change Not Given (Optional) -->
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">Change Not Given (optional)</label>
+                    <input type="number" name="change_not_given" step="0.01" min="0" value="0" id="id_change_not_given" class="w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <!-- Customer Name -->
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">Customer Name (if change not given)</label>
+                    <input type="text" name="customer_name" id="id_customer_name" class="w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Optional">
+                </div>
+
+                <!-- Buttons -->
+                <div class="grid grid-cols-2 gap-2 pt-2">
+                    <button type="submit" class="w-full bg-green-600 text-white rounded py-2 hover:bg-green-700 font-semibold text-sm">Complete Sale</button>
+                    <a href="{% url 'dashboard' %}" class="w-full bg-red-600 text-white rounded py-2 hover:bg-red-700 font-semibold text-sm text-center">Cancel</a>
+                </div>
+
+                <!-- Clear Cart Button -->
+                <button type="button" id="clear_cart_btn" class="w-full bg-gray-300 text-gray-700 rounded py-2 hover:bg-gray-400 font-semibold text-sm">Clear Cart</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div id="use_change_modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white w-full max-w-lg rounded-lg shadow-lg">
+        <div class="px-4 py-3 border-b flex items-center justify-between">
+            <h3 class="text-base font-semibold text-gray-800">Use change</h3>
+            <button type="button" id="close_use_change_modal" class="text-gray-500 hover:text-gray-700 text-lg leading-none">×</button>
+        </div>
+        <div class="p-4 space-y-3">
+            <input type="text" id="use_change_search" placeholder="Search customer..." class="w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <div id="use_change_list" class="max-h-72 overflow-y-auto space-y-2">
+                {% for customer in change_customers %}
+                    <button
+                        type="button"
+                        class="use-change-option w-full text-left border rounded px-3 py-2 hover:bg-gray-50"
+                        data-name="{{ customer.customer_name|escapejs }}"
+                        data-amount="{{ customer.available_change|floatformat:2 }}"
+                    >
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="text-sm font-medium text-gray-800">{{ customer.customer_name }}</span>
+                            <span class="text-sm font-semibold text-green-700">$ {{ customer.available_change|floatformat:2 }}</span>
+                        </div>
+                    </button>
+                {% empty %}
+                    <p class="text-sm text-gray-500">No customers with saved change.</p>
+                {% endfor %}
             </div>
-            <div>
-                <label class="block text-sm mb-1">Amount Paid</label>
-                {{ checkout_form.amount_paid }}
-            </div>
-            <div>
-                <label class="block text-sm mb-1">Change Due (auto)</label>
-                <input id="change_due_display" type="number" step="0.01" value="0.00" class="w-full rounded border px-3 py-2 bg-slate-100" readonly>
-            </div>
-            <div>
-                <label class="block text-sm mb-1">Change Not Given (optional)</label>
-                {{ checkout_form.change_not_given }}
-            </div>
-            <div>
-                <label class="block text-sm mb-1">Customer Name (required if change not given)</label>
-                {{ checkout_form.customer_name }}
-            </div>
-            <button class="w-full bg-green-600 text-white rounded py-2 hover:bg-green-500">Complete Sale</button>
-        </form>
+        </div>
     </div>
 </div>
 
@@ -92,23 +194,37 @@
         const paymentMethodButtons = document.querySelectorAll('.payment-method-btn');
         const amountPaidInput = document.getElementById('id_amount_paid');
         const changeDueDisplay = document.getElementById('change_due_display');
+        const changeNotGivenInput = document.getElementById('id_change_not_given');
+        const customerNameInput = document.getElementById('id_customer_name');
+        const useChangeCustomerInput = document.getElementById('id_use_change_customer');
+        const openUseChangeModalBtn = document.getElementById('open_use_change_modal');
+        const closeUseChangeModalBtn = document.getElementById('close_use_change_modal');
+        const useChangeModal = document.getElementById('use_change_modal');
+        const useChangeSearchInput = document.getElementById('use_change_search');
+        const useChangeOptions = document.querySelectorAll('.use-change-option');
+        const useChangeStatus = document.getElementById('use_change_status');
+        const useChangeError = document.getElementById('use_change_error');
+        const clearCartBtn = document.getElementById('clear_cart_btn');
         const cartTotal = Number('{{ cart_total|floatformat:2 }}') || 0;
 
+        // Initialize payment method buttons
         function updatePaymentButtons() {
             const selected = paymentMethodInput?.value || 'cash';
             paymentMethodButtons.forEach((button) => {
                 if (button.dataset.method === selected) {
-                    button.classList.remove('bg-white', 'text-slate-700', 'border-slate-300');
-                    button.classList.add('bg-blue-600', 'text-white', 'border-blue-600');
+                    button.classList.remove('bg-white', 'text-gray-700', 'border-gray-300', 'hover:bg-gray-50');
+                    button.classList.add('bg-blue-600', 'text-white', 'border-blue-600', 'hover:bg-blue-700');
                 } else {
-                    button.classList.remove('bg-blue-600', 'text-white', 'border-blue-600');
-                    button.classList.add('bg-white', 'text-slate-700', 'border-slate-300');
+                    button.classList.remove('bg-blue-600', 'text-white', 'border-blue-600', 'hover:bg-blue-700');
+                    button.classList.add('bg-white', 'text-gray-700', 'border-gray-300', 'hover:bg-gray-50');
                 }
             });
         }
 
+        // Payment method button click handler
         paymentMethodButtons.forEach((button) => {
-            button.addEventListener('click', function() {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
                 if (paymentMethodInput) {
                     paymentMethodInput.value = button.dataset.method;
                     updatePaymentButtons();
@@ -116,15 +232,143 @@
             });
         });
 
+        // Update change due calculation
         function updateChangeDue() {
             const amountPaid = Number(amountPaidInput?.value || 0);
             const changeDue = Math.max(0, amountPaid - cartTotal);
             changeDueDisplay.value = changeDue.toFixed(2);
         }
 
+        function resetUseChangeError() {
+            if (!useChangeError) {
+                return;
+            }
+            useChangeError.textContent = '';
+            useChangeError.classList.add('hidden');
+        }
+
+        function showUseChangeError(message) {
+            if (!useChangeError) {
+                return;
+            }
+            useChangeError.textContent = message;
+            useChangeError.classList.remove('hidden');
+        }
+
+        function clearAppliedChange() {
+            if (!useChangeCustomerInput || !amountPaidInput || !useChangeStatus) {
+                return;
+            }
+            useChangeCustomerInput.value = '';
+            amountPaidInput.readOnly = false;
+            amountPaidInput.classList.remove('bg-gray-100');
+            useChangeStatus.textContent = '';
+            useChangeStatus.classList.add('hidden');
+        }
+
+        function applyCustomerChange(customerName, availableAmount) {
+            resetUseChangeError();
+            clearAppliedChange();
+
+            if (availableAmount < cartTotal) {
+                showUseChangeError(customerName + ' only has $' + availableAmount.toFixed(2) + ' saved change. Sale total is $' + cartTotal.toFixed(2) + '.');
+                return;
+            }
+
+            if (useChangeCustomerInput) {
+                useChangeCustomerInput.value = customerName;
+            }
+
+            if (customerNameInput && !customerNameInput.value.trim()) {
+                customerNameInput.value = customerName;
+            }
+
+            amountPaidInput.value = cartTotal.toFixed(2);
+            amountPaidInput.readOnly = true;
+            amountPaidInput.classList.add('bg-gray-100');
+
+            if (changeNotGivenInput) {
+                changeNotGivenInput.value = '0';
+            }
+
+            if (useChangeStatus) {
+                useChangeStatus.textContent = 'Using ' + customerName + '\'s change balance ($' + availableAmount.toFixed(2) + ').';
+                useChangeStatus.classList.remove('hidden');
+            }
+
+            updateChangeDue();
+        }
+
         if (amountPaidInput && changeDueDisplay) {
             amountPaidInput.addEventListener('input', updateChangeDue);
             updateChangeDue();
+        }
+
+        if (openUseChangeModalBtn && useChangeModal) {
+            openUseChangeModalBtn.addEventListener('click', function() {
+                useChangeModal.classList.remove('hidden');
+                useChangeModal.classList.add('flex');
+                if (useChangeSearchInput) {
+                    useChangeSearchInput.value = '';
+                    useChangeSearchInput.dispatchEvent(new Event('input'));
+                    useChangeSearchInput.focus();
+                }
+            });
+        }
+
+        if (closeUseChangeModalBtn && useChangeModal) {
+            closeUseChangeModalBtn.addEventListener('click', function() {
+                useChangeModal.classList.add('hidden');
+                useChangeModal.classList.remove('flex');
+            });
+        }
+
+        if (useChangeModal) {
+            useChangeModal.addEventListener('click', function(event) {
+                if (event.target === useChangeModal) {
+                    useChangeModal.classList.add('hidden');
+                    useChangeModal.classList.remove('flex');
+                }
+            });
+        }
+
+        if (useChangeSearchInput) {
+            useChangeSearchInput.addEventListener('input', function() {
+                const term = useChangeSearchInput.value.trim().toLowerCase();
+                useChangeOptions.forEach((option) => {
+                    const name = (option.dataset.name || '').toLowerCase();
+                    option.classList.toggle('hidden', !name.includes(term));
+                });
+            });
+        }
+
+        useChangeOptions.forEach((option) => {
+            option.addEventListener('click', function() {
+                const customerName = option.dataset.name || '';
+                const availableAmount = Number(option.dataset.amount || 0);
+                applyCustomerChange(customerName, availableAmount);
+                if (useChangeModal) {
+                    useChangeModal.classList.add('hidden');
+                    useChangeModal.classList.remove('flex');
+                }
+            });
+        });
+
+        paymentMethodButtons.forEach((button) => {
+            button.addEventListener('click', function() {
+                resetUseChangeError();
+            });
+        });
+
+        // Clear cart functionality
+        if (clearCartBtn) {
+            clearCartBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (confirm('Are you sure you want to clear the cart?')) {
+                    // Redirect to clear cart (you may need to add a view for this)
+                    location.reload();
+                }
+            });
         }
 
         updatePaymentButtons();

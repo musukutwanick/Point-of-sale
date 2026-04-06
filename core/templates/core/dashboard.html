@@ -1,48 +1,79 @@
 {% extends 'core/base.html' %}
 {% block title %}Dashboard | POS{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-semibold mb-4">Admin Dashboard ({{ today }})</h1>
+<h1 class="text-4xl font-semibold mb-6">Dashboard</h1>
+
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-    <div class="bg-white rounded-lg shadow p-4">
-        <p class="text-sm text-slate-500">Total Sales Today</p>
-        <p class="text-2xl font-bold text-green-600">$ {{ total_sales }}</p>
+    <div class="bg-white rounded-2xl shadow p-5">
+        <p class="text-slate-500 text-2xl mb-2">Today's Sales</p>
+        <p class="text-5xl font-bold mb-1">$ {{ total_sales }}</p>
     </div>
-    <div class="bg-white rounded-lg shadow p-4">
-        <p class="text-sm text-slate-500">Transactions Today</p>
-        <p class="text-2xl font-bold text-blue-600">{{ transaction_count }}</p>
+    <div class="bg-white rounded-2xl shadow p-5">
+        <p class="text-slate-500 text-2xl mb-2">Transactions</p>
+        <p class="text-5xl font-bold mb-1">{{ transaction_count }}</p>
     </div>
-    <div class="bg-white rounded-lg shadow p-4">
-        <p class="text-sm text-slate-500">Change Not Collected</p>
-        <p class="text-2xl font-bold text-orange-600">$ {{ outstanding_change }}</p>
+    <div class="bg-white rounded-2xl shadow p-5">
+        <p class="text-slate-500 text-2xl mb-2">Profit for the Day</p>
+        <p class="text-5xl font-bold mb-1">$ {{ today_profit }}</p>
     </div>
-    <div class="bg-white rounded-lg shadow p-4">
-        <p class="text-sm text-slate-500">Low Stock Items</p>
-        <p class="text-2xl font-bold text-red-600">{{ low_stock_items|length }}</p>
+    <div class="bg-white rounded-2xl shadow p-5">
+        <p class="text-slate-500 text-2xl mb-2">Low Stock Items</p>
+        <p class="text-5xl font-bold mb-1">{{ low_stock_items|length }}</p>
     </div>
 </div>
 
-<div class="bg-white rounded-lg shadow p-4">
-    <h2 class="text-lg font-semibold mb-3">Low Stock Warning</h2>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+    <div class="lg:col-span-2 bg-white rounded-2xl shadow p-5">
+        <h2 class="text-3xl font-semibold mb-4">Sales This Week</h2>
+        <div class="h-72 border rounded-xl p-4 flex items-end gap-3 bg-slate-50">
+            {% for day in weekly_sales %}
+                <div class="flex-1 flex flex-col items-center justify-end h-full">
+                    <div class="w-full max-w-14 bg-slate-900 rounded-t-lg" style="height: {% if day.height_pct < 8 and day.value > 0 %}8{% else %}{{ day.height_pct }}{% endif %}%"></div>
+                    <p class="text-sm text-slate-600 mt-2">{{ day.label }}</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow p-5">
+        <h2 class="text-3xl font-semibold mb-4">Low Stock Alerts</h2>
+        <div class="space-y-3">
+            {% for product in low_stock_items|slice:":6" %}
+                <div class="flex items-center justify-between bg-slate-100 rounded-xl px-3 py-3">
+                    <p class="font-medium">{{ product.name }}</p>
+                    <span class="bg-red-100 text-red-700 text-sm font-semibold px-3 py-1 rounded-full">{{ product.stock_quantity }} left</span>
+                </div>
+            {% empty %}
+                <p class="text-slate-500">No low stock alerts.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="bg-white rounded-2xl shadow p-5">
+    <h2 class="text-3xl font-semibold mb-4">Recent Transactions</h2>
     <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead>
-                <tr class="text-left border-b">
-                    <th class="py-2">Product</th>
-                    <th class="py-2">Stock</th>
-                    <th class="py-2">Threshold</th>
+                <tr class="border-b text-left">
+                    <th class="py-2 pr-3">ID</th>
+                    <th class="py-2 pr-3">Time</th>
+                    <th class="py-2 pr-3">Seller</th>
+                    <th class="py-2 pr-3">Total</th>
+                    <th class="py-2 pr-3">Profit</th>
                 </tr>
             </thead>
             <tbody>
-                {% for product in low_stock_items %}
+                {% for tx in recent_transactions %}
                     <tr class="border-b">
-                        <td class="py-2">{{ product.name }}</td>
-                        <td class="py-2 text-red-600 font-semibold">{{ product.stock_quantity }}</td>
-                        <td class="py-2">{{ product.low_stock_threshold }}</td>
+                        <td class="py-2 pr-3">#{{ tx.id }}</td>
+                        <td class="py-2 pr-3">{{ tx.created_at|date:"M d, H:i" }}</td>
+                        <td class="py-2 pr-3">{{ tx.seller.username }}</td>
+                        <td class="py-2 pr-3">$ {{ tx.total_amount }}</td>
+                        <td class="py-2 pr-3">$ {{ tx.total_profit }}</td>
                     </tr>
                 {% empty %}
-                    <tr>
-                        <td colspan="3" class="py-3 text-slate-500">No low stock items.</td>
-                    </tr>
+                    <tr><td colspan="5" class="py-3 text-slate-500">No transactions yet.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

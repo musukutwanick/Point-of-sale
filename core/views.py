@@ -1,9 +1,6 @@
 from decimal import Decimal
-from pathlib import Path
-import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.models import Group
@@ -11,11 +8,15 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.views import LoginView
 from django.db import models, transaction as db_transaction
 from django.db.models import Count, F, Q, Sum
+from django.http import HttpResponse
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from openpyxl import Workbook
 
 from .forms import (
+	BackupExportForm,
+	CashierCreateForm,
 	ChangeCollectionForm,
 	ClientBusinessForm,
 	ClientBusinessUpdateForm,
@@ -36,11 +37,11 @@ def is_system_admin(user):
 
 
 def is_admin(user):
-	return user.is_authenticated and (user.is_superuser or user.groups.filter(name='Admin').exists())
+	return user.is_authenticated and (not user.is_superuser) and user.groups.filter(name='Admin').exists()
 
 
 def is_seller(user):
-	return user.is_authenticated and (is_admin(user) or user.groups.filter(name='Seller').exists())
+	return user.is_authenticated and (not user.is_superuser) and (is_admin(user) or user.groups.filter(name='Seller').exists())
 
 
 def _add_subscription_warning(request):
@@ -79,6 +80,9 @@ class UserLoginView(LoginView):
 			return reverse('sysadmin_dashboard')
 
 		profile = getattr(self.request.user, 'profile', None)
+		if profile and profile.client and not profile.client.is_active:
+			return reverse('account_deactivated')
+
 		if profile and profile.must_change_password:
 			return reverse('force_change_password')
 
@@ -95,6 +99,9 @@ def home_redirect(request):
 		return redirect('sysadmin_dashboard')
 
 	profile = getattr(request.user, 'profile', None)
+	if profile and profile.client and not profile.client.is_active:
+		return redirect('account_deactivated')
+
 	if profile and profile.must_change_password:
 		return redirect('force_change_password')
 
@@ -111,9 +118,18 @@ def no_access(request):
 
 
 @login_required
+def account_deactivated(request):
+	if request.user.is_superuser:
+		return redirect('sysadmin_dashboard')
+	return render(request, 'core/account_deactivated.html', status=403)
+
+
+@login_required
 @user_passes_test(is_system_admin, login_url='home')
 def sysadmin_dashboard(request):
-	clients = ClientBusiness.objects.all().order_by('business_name')
+	clients = ClientBusiness.objects.annotate(
+		cashier_count=Count('profiles', filter=Q(profiles__role=UserProfile.ROLE_CASHIER))
+	).all().order_by('business_name')
 	total_clients = clients.count()
 	expired_clients = sum(1 for client in clients if client.is_expired and not client.is_paused)
 	paused_clients = sum(1 for client in clients if client.is_paused)
@@ -125,6 +141,35 @@ def sysadmin_dashboard(request):
 		'paused_clients': paused_clients,
 	}
 	return render(request, 'core/sysadmin_dashboard.html', context)
+
+
+@login_required
+@user_passes_test(is_system_admin, login_url='home')
+def client_add_cashier(request, pk):
+	client = get_object_or_404(ClientBusiness, pk=pk)
+	form = CashierCreateForm(request.POST or None)
+
+	if request.method == 'POST' and form.is_valid():
+		username = form.cleaned_data['username'].strip()
+		password = form.cleaned_data['password']
+
+		if User.objects.filter(username=username).exists():
+			form.add_error('username', 'This username already exists.')
+		else:
+			seller_group, _ = Group.objects.get_or_create(name='Seller')
+			cashier_user = User.objects.create_user(username=username, password=password)
+			cashier_user.groups.add(seller_group)
+
+			cashier_profile, _ = UserProfile.objects.get_or_create(user=cashier_user)
+			cashier_profile.client = client
+			cashier_profile.role = UserProfile.ROLE_CASHIER
+			cashier_profile.must_change_password = True
+			cashier_profile.save()
+
+			messages.success(request, f'Cashier {username} added to {client.business_name}.')
+			return redirect('sysadmin_dashboard')
+
+	return render(request, 'core/cashier_form.html', {'form': form, 'client': client})
 
 
 @login_required
@@ -201,6 +246,20 @@ def client_delete(request, pk):
 
 
 @login_required
+@user_passes_test(is_system_admin, login_url='home')
+def client_toggle_active(request, pk):
+	client = get_object_or_404(ClientBusiness, pk=pk)
+	if request.method == 'POST':
+		client.is_active = not client.is_active
+		client.save(update_fields=['is_active'])
+		if client.is_active:
+			messages.success(request, f'{client.business_name} account activated.')
+		else:
+			messages.warning(request, f'{client.business_name} account deactivated.')
+	return redirect('sysadmin_dashboard')
+
+
+@login_required
 def force_change_password(request):
 	profile = getattr(request.user, 'profile', None)
 	if request.user.is_superuser:
@@ -230,15 +289,39 @@ def dashboard(request):
 	today = timezone.localdate()
 	today_transactions = Transaction.objects.filter(created_at__date=today, client=client)
 	total_sales = today_transactions.aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+	today_profit = TransactionItem.objects.filter(transaction__created_at__date=today, transaction__client=client).aggregate(total=Sum('line_profit'))['total'] or Decimal('0')
 	transaction_count = today_transactions.aggregate(count=Count('id'))['count'] or 0
 	outstanding_change = today_transactions.aggregate(total=Sum(F('change_due') - F('change_given'), output_field=models.DecimalField()))['total'] or Decimal('0')
 	low_stock_items = Product.objects.filter(client=client, stock_quantity__lte=F('low_stock_threshold')).order_by('stock_quantity')
+	recent_transactions = Transaction.objects.filter(client=client).select_related('seller').order_by('-created_at')[:5]
+
+	start_of_week = today - timedelta(days=today.weekday())
+	weekly_sales = []
+	for day_offset in range(7):
+		day = start_of_week + timedelta(days=day_offset)
+		total_for_day = Transaction.objects.filter(client=client, created_at__date=day).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+		weekly_sales.append({
+			'label': day.strftime('%a'),
+			'value': total_for_day,
+		})
+
+	max_week_sale = max((item['value'] for item in weekly_sales), default=Decimal('0'))
+	if max_week_sale > 0:
+		for item in weekly_sales:
+			item['height_pct'] = int((item['value'] / max_week_sale) * 100)
+	else:
+		for item in weekly_sales:
+			item['height_pct'] = 0
 
 	context = {
 		'total_sales': total_sales,
+		'today_profit': today_profit,
 		'transaction_count': transaction_count,
 		'outstanding_change': outstanding_change,
 		'low_stock_items': low_stock_items,
+		'recent_transactions': recent_transactions,
+		'weekly_sales': weekly_sales,
+		'max_week_sale': max_week_sale,
 		'today': today,
 	}
 	return render(request, 'core/dashboard.html', context)
@@ -335,6 +418,13 @@ def new_sale(request):
 	else:
 		products = Product.objects.filter(client=client, stock_quantity__gt=0).order_by('name')[:20]
 
+	change_customers = Transaction.objects.filter(client=client).exclude(customer_name='').values('customer_name').annotate(
+		available_change=Sum(
+			F('change_due') - F('change_given'),
+			output_field=models.DecimalField(max_digits=10, decimal_places=2),
+		)
+	).filter(available_change__gt=0).order_by('customer_name')
+
 	cart_items, cart_total = _build_cart_items(cart, client=client)
 	checkout_form = SaleCheckoutForm()
 
@@ -345,6 +435,7 @@ def new_sale(request):
 		'checkout_form': checkout_form,
 		'cart_items': cart_items,
 		'cart_total': cart_total,
+		'change_customers': change_customers,
 	}
 	return render(request, 'core/sale.html', context)
 
@@ -377,13 +468,25 @@ def complete_sale(request):
 
 	client = _current_client(request.user)
 	cart_items, cart_total = _build_cart_items(cart, client=client)
+	use_change_customer = (request.POST.get('use_change_customer') or '').strip()
+	is_using_change = bool(use_change_customer)
+
 	payment_method = checkout_form.cleaned_data['payment_method']
 	amount_paid = checkout_form.cleaned_data['amount_paid']
-	change_due = amount_paid - cart_total if amount_paid > cart_total else Decimal('0')
 	change_not_given = checkout_form.cleaned_data['change_not_given']
 	if change_not_given is None:
 		change_not_given = Decimal('0')
 	customer_name = checkout_form.cleaned_data['customer_name'].strip()
+
+	if is_using_change:
+		amount_paid = cart_total
+		change_due = Decimal('0')
+		change_not_given = Decimal('0')
+		if not customer_name:
+			customer_name = use_change_customer
+	else:
+		change_due = amount_paid - cart_total if amount_paid > cart_total else Decimal('0')
+
 	change_given = change_due - change_not_given
 
 	if change_not_given > change_due:
@@ -400,6 +503,26 @@ def complete_sale(request):
 
 	try:
 		with db_transaction.atomic():
+			if is_using_change:
+				credit_transactions = Transaction.objects.select_for_update().filter(
+					client=client,
+					customer_name__iexact=use_change_customer,
+					change_due__gt=F('change_given'),
+				).order_by('created_at', 'id')
+
+				available_change = credit_transactions.aggregate(
+					total=Sum(
+						F('change_due') - F('change_given'),
+						output_field=models.DecimalField(max_digits=10, decimal_places=2),
+					)
+				)['total'] or Decimal('0')
+
+				if available_change < cart_total:
+					raise ValueError(
+						f'{use_change_customer} only has $ {available_change} change available. '
+						f'Sale total is $ {cart_total}.'
+					)
+
 			transaction_record = Transaction.objects.create(
 				seller=request.user,
 				client=client,
@@ -423,14 +546,33 @@ def complete_sale(request):
 					transaction=transaction_record,
 					product=product,
 					product_name=product.name,
+					unit_buying_price=product.buying_price,
 					unit_price=item['product'].price,
 					quantity=item['quantity'],
 					line_total=item['line_total'],
+					line_profit=(product.price - product.buying_price) * item['quantity'],
 				)
+
+			if is_using_change:
+				remaining_to_apply = cart_total
+				for credit_tx in credit_transactions:
+					if remaining_to_apply <= 0:
+						break
+					credit_available = credit_tx.change_due - credit_tx.change_given
+					if credit_available <= 0:
+						continue
+
+					applied_amount = min(credit_available, remaining_to_apply)
+					credit_tx.change_given = credit_tx.change_given + applied_amount
+					credit_tx.save(update_fields=['change_given'])
+					remaining_to_apply -= applied_amount
 
 		request.session['cart'] = {}
 		request.session.modified = True
-		messages.success(request, f'Sale completed. Transaction #{transaction_record.id}.')
+		if is_using_change:
+			messages.success(request, f'Sale completed using {use_change_customer}\'s saved change. Transaction #{transaction_record.id}.')
+		else:
+			messages.success(request, f'Sale completed. Transaction #{transaction_record.id}.')
 	except ValueError as exc:
 		messages.error(request, str(exc))
 
@@ -464,34 +606,131 @@ def changes_list(request):
 def transaction_list(request):
 	form = TransactionFilterForm(request.GET or None)
 	transactions = Transaction.objects.prefetch_related('items').select_related('seller').filter(client=_current_client(request.user))
-	filtered_date = None
-	if form.is_valid() and form.cleaned_data.get('date'):
-		filtered_date = form.cleaned_data['date']
-		transactions = transactions.filter(created_at__date=filtered_date)
+	if form.is_valid():
+		q = (form.cleaned_data.get('q') or '').strip()
+		from_date = form.cleaned_data.get('from_date')
+		to_date = form.cleaned_data.get('to_date')
+
+		if q:
+			id_query = None
+			if q.lower().startswith('txn-'):
+				possible_id = q.split('-', 1)[-1]
+				if possible_id.isdigit():
+					id_query = int(possible_id)
+			elif q.isdigit():
+				id_query = int(q)
+
+			search_filter = Q(items__product_name__icontains=q)
+			if id_query is not None:
+				search_filter = search_filter | Q(id=id_query)
+			transactions = transactions.filter(search_filter).distinct()
+
+		if from_date:
+			transactions = transactions.filter(created_at__date__gte=from_date)
+		if to_date:
+			transactions = transactions.filter(created_at__date__lte=to_date)
+
 	transactions = transactions.order_by('-created_at')
 	
 	total_amount_filtered = transactions.aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+	total_profit_filtered = TransactionItem.objects.filter(transaction__in=transactions).aggregate(total=Sum('line_profit'))['total'] or Decimal('0')
 	outstanding_change_filtered = transactions.aggregate(total=Sum(F('change_due') - F('change_given'), output_field=models.DecimalField()))['total'] or Decimal('0')
+	transaction_count_filtered = transactions.count()
 	
 	return render(request, 'core/transactions.html', {
 		'transactions': transactions,
 		'form': form,
-		'filtered_date': filtered_date,
 		'total_amount_filtered': total_amount_filtered,
+		'total_profit_filtered': total_profit_filtered,
 		'outstanding_change_filtered': outstanding_change_filtered,
+		'transaction_count_filtered': transaction_count_filtered,
 	})
 
 
 @login_required
 @user_passes_test(is_admin, login_url='no_access')
 def backup_database(request):
+	client = _current_client(request.user)
 	if request.method == 'POST':
-		db_path = Path(settings.BASE_DIR) / 'db.sqlite3'
-		backup_dir = Path(settings.BASE_DIR) / 'backups'
-		backup_dir.mkdir(exist_ok=True)
-		timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-		backup_file = backup_dir / f'backup_{timestamp}.sqlite3'
-		shutil.copy2(db_path, backup_file)
-		messages.success(request, f'Backup created: {backup_file.name}')
-		return redirect('backup_database')
-	return render(request, 'core/backup.html')
+		form = BackupExportForm(request.POST)
+		if form.is_valid():
+			from_date = form.cleaned_data['from_date']
+			to_date = form.cleaned_data['to_date']
+
+			workbook = Workbook()
+			stock_sheet = workbook.active
+			stock_sheet.title = 'Stock Levels'
+			stock_sheet.append([
+				'Product',
+				'Buying Price',
+				'Selling Price',
+				'Profit Per Unit',
+				'Stock Quantity',
+			])
+
+			products = Product.objects.filter(client=client).order_by('name')
+			for product in products:
+				stock_sheet.append([
+					product.name,
+					float(product.buying_price),
+					float(product.price),
+					float(product.unit_profit),
+					product.stock_quantity,
+				])
+
+			transactions_sheet = workbook.create_sheet(title='Transactions')
+			transactions_sheet.append([
+				'Transaction ID',
+				'Date Time',
+				'Seller',
+				'Payment Method',
+				'Customer Name',
+				'Product',
+				'Quantity',
+				'Buying Price',
+				'Selling Price',
+				'Line Total',
+				'Line Profit',
+				'Transaction Total',
+				'Amount Paid',
+				'Change Due',
+				'Change Given',
+			])
+
+			items = TransactionItem.objects.select_related('transaction', 'transaction__seller').filter(
+				transaction__client=client,
+				transaction__created_at__date__range=(from_date, to_date),
+			).order_by('transaction__created_at', 'transaction_id', 'id')
+
+			for item in items:
+				tx = item.transaction
+				transactions_sheet.append([
+					tx.id,
+					tx.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+					tx.seller.username,
+					tx.get_payment_method_display(),
+					tx.customer_name,
+					item.product_name,
+					item.quantity,
+					float(item.unit_buying_price),
+					float(item.unit_price),
+					float(item.line_total),
+					float(item.line_profit),
+					float(tx.total_amount),
+					float(tx.amount_paid),
+					float(tx.change_due),
+					float(tx.change_given),
+				])
+
+			filename = f"backup_{from_date.strftime('%Y%m%d')}_to_{to_date.strftime('%Y%m%d')}.xlsx"
+			response = HttpResponse(
+				content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+			)
+			response['Content-Disposition'] = f'attachment; filename="{filename}"'
+			workbook.save(response)
+			return response
+	else:
+		today = timezone.localdate()
+		form = BackupExportForm(initial={'from_date': today, 'to_date': today})
+
+	return render(request, 'core/backup.html', {'form': form})

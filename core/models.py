@@ -7,6 +7,7 @@ from datetime import timedelta
 class Product(models.Model):
 	client = models.ForeignKey('ClientBusiness', on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
 	name = models.CharField(max_length=150)
+	buying_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 	price = models.DecimalField(max_digits=10, decimal_places=2)
 	stock_quantity = models.PositiveIntegerField(default=0)
 	low_stock_threshold = models.PositiveIntegerField(default=5)
@@ -25,9 +26,14 @@ class Product(models.Model):
 	def is_low_stock(self):
 		return self.stock_quantity <= self.low_stock_threshold
 
+	@property
+	def unit_profit(self):
+		return self.price - self.buying_price
+
 
 class ClientBusiness(models.Model):
 	business_name = models.CharField(max_length=200, unique=True)
+	is_active = models.BooleanField(default=True)
 	subscription_start = models.DateField(default=timezone.localdate)
 	subscription_months = models.PositiveIntegerField(default=1)
 	created_at = models.DateTimeField(auto_now_add=True)
@@ -110,14 +116,20 @@ class Transaction(models.Model):
 	def has_outstanding_change(self):
 		return self.change_not_given > 0
 
+	@property
+	def total_profit(self):
+		return sum((item.line_profit for item in self.items.all()), 0)
+
 
 class TransactionItem(models.Model):
 	transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name='items')
 	product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, blank=True)
 	product_name = models.CharField(max_length=150)
+	unit_buying_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 	unit_price = models.DecimalField(max_digits=10, decimal_places=2)
 	quantity = models.PositiveIntegerField()
 	line_total = models.DecimalField(max_digits=10, decimal_places=2)
+	line_profit = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
 	def __str__(self):
 		return f"{self.product_name} x {self.quantity}"

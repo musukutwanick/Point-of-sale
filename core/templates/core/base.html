@@ -16,14 +16,16 @@
                         <a href="{% url 'sysadmin_dashboard' %}" class="px-3 py-1 rounded bg-purple-700 hover:bg-purple-600">System Admin</a>
                     {% endif %}
                     {% if is_admin %}
-                        <a href="{% url 'dashboard' %}" class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Dashboard</a>
+                        <a href="{% url 'dashboard' %}" class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Home</a>
                         <a href="{% url 'product_list' %}" class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Products</a>
                         <a href="{% url 'transaction_list' %}" class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Transactions</a>
-                        <a href="{% url 'backup_database' %}" class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Backup</a>
                     {% endif %}
-                    {% if is_seller %}
+                    {% if is_seller and not is_admin %}
                         <a href="{% url 'new_sale' %}" class="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500">New Sale</a>
                         <a href="{% url 'changes_list' %}" class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Changes</a>
+                    {% endif %}
+                    {% if is_admin %}
+                        <a href="{% url 'backup_database' %}" class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Backup</a>
                     {% endif %}
                     <form method="post" action="{% url 'logout' %}">
                         {% csrf_token %}

@@ -1,99 +1,82 @@
 {% extends 'core/base.html' %}
 {% block title %}Transactions | POS{% endblock %}
 {% block content %}
-<div class="flex items-center justify-between gap-3 mb-6">
-    <div class="flex items-center gap-3">
-        <a href="{% url 'dashboard' %}" class="px-3 py-1 rounded bg-slate-600 text-white text-sm hover:bg-slate-500">← Back</a>
-        <h1 class="text-2xl font-semibold">Transactions</h1>
+<div class="mb-6">
+    <div class="flex items-center gap-3 mb-4">
+        <h1 class="text-4xl font-semibold">Transactions</h1>
     </div>
-    <form method="get" class="flex items-center gap-2">
-        {{ form.date }}
-        <button class="bg-blue-600 text-white px-3 py-1 text-sm rounded hover:bg-blue-500">Filter</button>
+
+    <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+        <div class="md:col-span-2">{{ form.q }}</div>
+        <div>{{ form.from_date }}</div>
+        <div>{{ form.to_date }}</div>
+        <div class="md:col-span-4">
+            <button class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-500">Filter</button>
+        </div>
     </form>
+
+    {% if form.non_field_errors %}
+        <div class="mb-4 px-4 py-3 rounded bg-red-100 text-red-800 text-sm">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="flex flex-wrap gap-3">
+        <div class="bg-white rounded-2xl shadow px-5 py-3 text-lg">Showing <span class="font-semibold">{{ transaction_count_filtered }}</span> transactions</div>
+        <div class="bg-white rounded-2xl shadow px-5 py-3 text-lg">Revenue <span class="font-semibold text-green-600">${{ total_amount_filtered }}</span></div>
+        <div class="bg-white rounded-2xl shadow px-5 py-3 text-lg">Profit <span class="font-semibold text-emerald-700">${{ total_profit_filtered }}</span></div>
+    </div>
 </div>
 
-{% if filtered_date %}
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-    <div class="bg-white rounded-lg shadow p-4">
-        <p class="text-sm text-slate-500">Total Amount Sold</p>
-        <p class="text-2xl font-bold text-green-600">$ {{ total_amount_filtered }}</p>
-    </div>
+<div class="bg-white rounded-2xl shadow overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="text-left border-b bg-slate-50">
+                <th class="p-4">ID</th>
+                <th class="p-4">Date & Time</th>
+                <th class="p-4">Cashier</th>
+                <th class="p-4">Items</th>
+                <th class="p-4">Payment Method</th>
+                <th class="p-4">Total</th>
+                <th class="p-4">Paid</th>
+                <th class="p-4">Change</th>
+                <th class="p-4">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tx in transactions %}
+                <tr class="border-b align-top">
+                    <td class="p-4 font-semibold">TXN-{{ tx.id|stringformat:"03d" }}</td>
+                    <td class="p-4">{{ tx.created_at|date:"M j, Y g:i A" }}</td>
+                    <td class="p-4">{{ tx.seller.username }}</td>
+                    <td class="p-4">
+                        {% for item in tx.items.all %}
+                            {{ item.product_name }} ×{{ item.quantity }}{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
+                    </td>
+                    <td class="p-4">{{ tx.get_payment_method_display }}</td>
+                    <td class="p-4 font-semibold">${{ tx.total_amount }}</td>
+                    <td class="p-4">${{ tx.amount_paid }}</td>
+                    <td class="p-4">${{ tx.change_due }}</td>
+                    <td class="p-4">
+                        <span class="inline-flex px-3 py-1 rounded-full text-sm bg-green-100 text-green-700 font-semibold">completed</span>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="9" class="p-4 text-slate-500">No transactions found.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
     <div class="bg-white rounded-lg shadow p-4">
         <p class="text-sm text-slate-500">Change Not Collected</p>
         <p class="text-2xl font-bold text-orange-600">$ {{ outstanding_change_filtered }}</p>
     </div>
-</div>
-{% endif %}
-
-<div class="space-y-3">
-    {% for tx in transactions %}
-        <div class="bg-white rounded-lg shadow">
-            <!-- Header -->
-            <div class="p-3 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div>
-                    <p class="font-semibold">Tx #{{ tx.id }} • {{ tx.seller.username }}</p>
-                    <p class="text-xs text-slate-500">{{ tx.created_at|date:"M d, Y H:i" }}</p>
-                </div>
-                <p class="text-sm"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-medium">{{ tx.get_payment_method_display }}</span></p>
-            </div>
-
-            <!-- Items (compact table) -->
-            <div class="overflow-x-auto px-3 pt-2">
-                <table class="w-full text-xs">
-                    <thead>
-                        <tr class="text-slate-600">
-                            <th class="text-left py-1 font-semibold">Product</th>
-                            <th class="text-right py-1 font-semibold w-12">Qty</th>
-                            <th class="text-right py-1 font-semibold w-16">Price</th>
-                            <th class="text-right py-1 font-semibold w-16">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in tx.items.all %}
-                            <tr class="border-t border-slate-100">
-                                <td class="py-1">{{ item.product_name }}</td>
-                                <td class="text-right py-1">{{ item.quantity }}</td>
-                                <td class="text-right py-1">$ {{ item.unit_price }}</td>
-                                <td class="text-right py-1 font-semibold">$ {{ item.line_total }}</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Summary -->
-            <div class="px-3 py-2 bg-slate-50 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
-                <div class="text-center">
-                    <p class="text-slate-500 font-medium">Sale</p>
-                    <p class="font-bold">$ {{ tx.total_amount }}</p>
-                </div>
-                <div class="text-center">
-                    <p class="text-slate-500 font-medium">Paid</p>
-                    <p class="font-bold">$ {{ tx.amount_paid }}</p>
-                </div>
-                <div class="text-center">
-                    <p class="text-slate-500 font-medium">Due</p>
-                    <p class="font-bold">$ {{ tx.change_due }}</p>
-                </div>
-                <div class="text-center">
-                    <p class="text-slate-500 font-medium">Given</p>
-                    <p class="font-bold">$ {{ tx.change_given }}</p>
-                </div>
-                <div class="text-center {% if tx.change_not_given > 0 %}bg-orange-100{% endif %} px-2 py-1 rounded">
-                    <p class="text-slate-500 font-medium">Pending</p>
-                    <p class="font-bold {% if tx.change_not_given > 0 %}text-orange-600{% endif %}">$ {{ tx.change_not_given }}</p>
-                </div>
-            </div>
-            {% if tx.customer_name %}
-                <div class="px-3 py-1 text-xs text-slate-600 border-t border-slate-200">
-                    <span class="font-semibold">Customer:</span> {{ tx.customer_name }}
-                </div>
-            {% endif %}
-        </div>
-    {% empty %}
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center text-slate-600">
-            <p class="text-sm">No transactions found.</p>
-        </div>
-    {% endfor %}
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-slate-500">Total Profit</p>
+        <p class="text-2xl font-bold text-emerald-700">$ {{ total_profit_filtered }}</p>
+    </div>
 </div>
 {% endblock %}

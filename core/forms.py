@@ -13,9 +13,10 @@ class LoginForm(AuthenticationForm):
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
-        fields = ['name', 'price', 'stock_quantity', 'low_stock_threshold']
+        fields = ['name', 'buying_price', 'price', 'stock_quantity', 'low_stock_threshold']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'w-full rounded border px-3 py-2'}),
+            'buying_price': forms.NumberInput(attrs={'class': 'w-full rounded border px-3 py-2', 'step': '0.01'}),
             'price': forms.NumberInput(attrs={'class': 'w-full rounded border px-3 py-2', 'step': '0.01'}),
             'stock_quantity': forms.NumberInput(attrs={'class': 'w-full rounded border px-3 py-2', 'min': 0}),
             'low_stock_threshold': forms.NumberInput(attrs={'class': 'w-full rounded border px-3 py-2', 'min': 1}),
@@ -89,6 +90,11 @@ class ClientBusinessUpdateForm(forms.ModelForm):
         }
 
 
+class CashierCreateForm(forms.Form):
+    username = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'class': 'w-full rounded border px-3 py-2'}))
+    password = forms.CharField(widget=forms.PasswordInput(attrs={'class': 'w-full rounded border px-3 py-2'}))
+
+
 class ForcePasswordChangeForm(PasswordChangeForm):
     old_password = forms.CharField(widget=forms.PasswordInput(attrs={'class': 'w-full rounded border px-3 py-2'}))
     new_password1 = forms.CharField(widget=forms.PasswordInput(attrs={'class': 'w-full rounded border px-3 py-2'}))
@@ -96,4 +102,27 @@ class ForcePasswordChangeForm(PasswordChangeForm):
 
 
 class TransactionFilterForm(forms.Form):
-    date = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date', 'class': 'w-full rounded border px-3 py-2'}))
+    q = forms.CharField(required=False, widget=forms.TextInput(attrs={'class': 'w-full rounded border px-3 py-2', 'placeholder': 'Search by ID or product...'}))
+    from_date = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date', 'class': 'w-full rounded border px-3 py-2'}))
+    to_date = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date', 'class': 'w-full rounded border px-3 py-2'}))
+
+    def clean(self):
+        cleaned_data = super().clean()
+        from_date = cleaned_data.get('from_date')
+        to_date = cleaned_data.get('to_date')
+        if from_date and to_date and from_date > to_date:
+            raise forms.ValidationError('From date cannot be after To date.')
+        return cleaned_data
+
+
+class BackupExportForm(forms.Form):
+    from_date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date', 'class': 'w-full rounded border px-3 py-2'}))
+    to_date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date', 'class': 'w-full rounded border px-3 py-2'}))
+
+    def clean(self):
+        cleaned_data = super().clean()
+        from_date = cleaned_data.get('from_date')
+        to_date = cleaned_data.get('to_date')
+        if from_date and to_date and from_date > to_date:
+            raise forms.ValidationError('From date cannot be after To date.')
+        return cleaned_data

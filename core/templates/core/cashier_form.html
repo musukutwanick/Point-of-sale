@@ -1,0 +1,33 @@
+{% extends 'core/base.html' %}
+{% block title %}Add Cashier | POS{% endblock %}
+{% block content %}
+<div class="max-w-xl bg-white rounded-lg shadow p-6">
+    <h1 class="text-2xl font-semibold mb-2">Add Cashier</h1>
+    <p class="text-sm text-slate-600 mb-4">Client: <span class="font-medium">{{ client.business_name }}</span></p>
+
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="px-4 py-3 rounded bg-red-100 text-red-800 text-sm">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div>
+            <label class="block text-sm mb-1">Cashier Username</label>
+            {{ form.username }}
+            {% if form.username.errors %}<p class="text-xs text-red-600 mt-1">{{ form.username.errors|join:', ' }}</p>{% endif %}
+        </div>
+
+        <div>
+            <label class="block text-sm mb-1">Cashier Password</label>
+            {{ form.password }}
+            {% if form.password.errors %}<p class="text-xs text-red-600 mt-1">{{ form.password.errors|join:', ' }}</p>{% endif %}
+        </div>
+
+        <div class="flex gap-2 pt-2">
+            <button class="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-500">Save</button>
+            <a href="{% url 'sysadmin_dashboard' %}" class="px-4 py-2 rounded bg-slate-600 text-white hover:bg-slate-500">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
