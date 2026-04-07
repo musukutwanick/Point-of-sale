@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from django.contrib.auth.models import User
 from django.utils import timezone
 from datetime import timedelta
@@ -7,6 +8,7 @@ from datetime import timedelta
 class Product(models.Model):
 	client = models.ForeignKey('ClientBusiness', on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
 	name = models.CharField(max_length=150)
+	barcode = models.CharField(max_length=64, blank=True, default='')
 	buying_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 	price = models.DecimalField(max_digits=10, decimal_places=2)
 	stock_quantity = models.PositiveIntegerField(default=0)
@@ -17,6 +19,11 @@ class Product(models.Model):
 		ordering = ['name']
 		constraints = [
 			models.UniqueConstraint(fields=['client', 'name'], name='unique_product_name_per_client'),
+			models.UniqueConstraint(
+				fields=['client', 'barcode'],
+				condition=~Q(barcode=''),
+				name='unique_product_barcode_per_client',
+			),
 		]
 
 	def __str__(self):

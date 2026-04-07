@@ -17,6 +17,7 @@
                     {% endif %}
                     {% if is_admin %}
                         <a href="{% url 'dashboard' %}" class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Home</a>
+                        <a href="{% url 'reports_dashboard' %}" class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Reports</a>
                         <a href="{% url 'product_list' %}" class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Products</a>
                         <a href="{% url 'transaction_list' %}" class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">Transactions</a>
                     {% endif %}

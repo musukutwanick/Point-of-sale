@@ -1,5 +1,7 @@
 from decimal import Decimal
 from datetime import datetime, timedelta
+from io import BytesIO
+from calendar import monthrange
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model, update_session_auth_hash
@@ -8,11 +10,14 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.views import LoginView
 from django.db import models, transaction as db_transaction
 from django.db.models import Count, F, Q, Sum
+from django.db.models.functions import TruncDate, TruncHour
 from django.http import HttpResponse
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from openpyxl import Workbook
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 from .forms import (
 	BackupExportForm,
@@ -329,6 +334,108 @@ def dashboard(request):
 
 @login_required
 @user_passes_test(is_admin, login_url='no_access')
+def reports_dashboard(request):
+	client = _current_client(request.user)
+	today = timezone.localdate()
+	period = (request.GET.get('period') or 'daily').lower()
+	from_date_str = (request.GET.get('from_date') or '').strip()
+	to_date_str = (request.GET.get('to_date') or '').strip()
+	if period not in {'daily', 'weekly', 'monthly'}:
+		period = 'daily'
+
+	start_date = None
+	end_date = None
+	if from_date_str or to_date_str:
+		try:
+			if from_date_str:
+				start_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
+			if to_date_str:
+				end_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+		except ValueError:
+			messages.error(request, 'Invalid date format. Use valid From/To dates.')
+			start_date = None
+			end_date = None
+
+	if start_date and not end_date:
+		end_date = start_date
+	if end_date and not start_date:
+		start_date = end_date
+
+	if start_date and end_date and start_date > end_date:
+		messages.error(request, 'From date cannot be after To date.')
+		start_date = None
+		end_date = None
+
+	if not start_date or not end_date:
+		if period == 'daily':
+			start_date = today
+			end_date = today
+		elif period == 'weekly':
+			start_date = today - timedelta(days=today.weekday())
+			end_date = start_date + timedelta(days=6)
+		else:
+			start_date = today.replace(day=1)
+			end_date = today.replace(day=monthrange(today.year, today.month)[1])
+
+	transactions = Transaction.objects.filter(
+		client=client,
+		created_at__date__range=(start_date, end_date),
+	)
+	transaction_items = TransactionItem.objects.filter(transaction__in=transactions)
+
+	total_sales = transactions.aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+	total_transactions = transactions.count()
+	total_profit = transaction_items.aggregate(total=Sum('line_profit'))['total'] or Decimal('0')
+
+	best_item_data = transaction_items.values('product_name').annotate(total_qty=Sum('quantity')).order_by('-total_qty').first()
+	best_selling_item = best_item_data['product_name'] if best_item_data else 'N/A'
+
+	if period == 'daily':
+		sales_points = transactions.annotate(bucket=TruncHour('created_at')).values('bucket').annotate(total=Sum('total_amount')).order_by('bucket')
+		sales_by_bucket = {item['bucket'].hour: float(item['total']) for item in sales_points if item['bucket']}
+		sales_labels = [f'{hour:02d}:00' for hour in range(24)]
+		sales_values = [sales_by_bucket.get(hour, 0) for hour in range(24)]
+	else:
+		sales_points = transactions.annotate(bucket=TruncDate('created_at')).values('bucket').annotate(total=Sum('total_amount')).order_by('bucket')
+		sales_by_bucket = {item['bucket']: float(item['total']) for item in sales_points if item['bucket']}
+		total_days = (end_date - start_date).days + 1
+		sales_labels = []
+		sales_values = []
+		for day_index in range(total_days):
+			day = start_date + timedelta(days=day_index)
+			sales_labels.append(day.strftime('%b %d'))
+			sales_values.append(sales_by_bucket.get(day, 0))
+
+	product_qty_stats = list(
+		transaction_items.values('product_name')
+		.annotate(total_qty=Sum('quantity'))
+		.order_by('-total_qty')
+	)
+	top_products = product_qty_stats[:8]
+	lowest_products = list(reversed(product_qty_stats[-8:])) if product_qty_stats else []
+
+	context = {
+		'period': period,
+		'start_date': start_date,
+		'end_date': end_date,
+		'from_date_value': start_date.strftime('%Y-%m-%d'),
+		'to_date_value': end_date.strftime('%Y-%m-%d'),
+		'total_sales': total_sales,
+		'total_transactions': total_transactions,
+		'total_profit': total_profit,
+		'best_selling_item': best_selling_item,
+		'sales_labels': sales_labels,
+		'sales_values': sales_values,
+		'top_product_labels': [item['product_name'] for item in top_products],
+		'top_product_values': [item['total_qty'] for item in top_products],
+		'low_product_labels': [item['product_name'] for item in lowest_products],
+		'low_product_values': [item['total_qty'] for item in lowest_products],
+	}
+	return render(request, 'core/reports_dashboard.html', context)
+
+
+@login_required
+@user_passes_test(is_admin, login_url='no_access')
 def product_list(request):
 	products = Product.objects.filter(client=_current_client(request.user))
 	return render(request, 'core/product_list.html', {'products': products})
@@ -573,10 +680,88 @@ def complete_sale(request):
 			messages.success(request, f'Sale completed using {use_change_customer}\'s saved change. Transaction #{transaction_record.id}.')
 		else:
 			messages.success(request, f'Sale completed. Transaction #{transaction_record.id}.')
+		return redirect('receipt_detail', tx_id=transaction_record.id)
 	except ValueError as exc:
 		messages.error(request, str(exc))
 
 	return redirect('new_sale')
+
+
+@login_required
+@user_passes_test(is_seller, login_url='no_access')
+def receipt_detail(request, tx_id):
+	tx = get_object_or_404(
+		Transaction.objects.select_related('seller', 'client').prefetch_related('items'),
+		pk=tx_id,
+		client=_current_client(request.user),
+	)
+	return render(request, 'core/receipt.html', {'tx': tx})
+
+
+@login_required
+@user_passes_test(is_seller, login_url='no_access')
+def receipt_pdf(request, tx_id):
+	tx = get_object_or_404(
+		Transaction.objects.select_related('seller', 'client').prefetch_related('items'),
+		pk=tx_id,
+		client=_current_client(request.user),
+	)
+
+	buffer = BytesIO()
+	pdf = canvas.Canvas(buffer, pagesize=A4)
+	page_width, page_height = A4
+
+	y = page_height - 50
+	pdf.setFont('Helvetica-Bold', 14)
+	pdf.drawString(40, y, tx.client.business_name if tx.client else 'Point of Sale')
+	y -= 22
+	pdf.setFont('Helvetica', 10)
+	pdf.drawString(40, y, f'Receipt #{tx.id}')
+	y -= 16
+	pdf.drawString(40, y, f'Date: {tx.created_at.strftime("%Y-%m-%d %H:%M")}' )
+	y -= 16
+	pdf.drawString(40, y, f'Cashier: {tx.seller.username}')
+	y -= 24
+
+	pdf.setFont('Helvetica-Bold', 10)
+	pdf.drawString(40, y, 'Item')
+	pdf.drawString(290, y, 'Qty')
+	pdf.drawString(340, y, 'Unit')
+	pdf.drawString(430, y, 'Line Total')
+	y -= 14
+	pdf.line(40, y, page_width - 40, y)
+	y -= 14
+
+	pdf.setFont('Helvetica', 10)
+	for item in tx.items.all():
+		if y < 90:
+			pdf.showPage()
+			y = page_height - 50
+			pdf.setFont('Helvetica', 10)
+		pdf.drawString(40, y, item.product_name[:40])
+		pdf.drawRightString(320, y, str(item.quantity))
+		pdf.drawRightString(400, y, f'${item.unit_price:.2f}')
+		pdf.drawRightString(page_width - 40, y, f'${item.line_total:.2f}')
+		y -= 16
+
+	y -= 8
+	pdf.line(40, y, page_width - 40, y)
+	y -= 20
+	pdf.setFont('Helvetica-Bold', 11)
+	pdf.drawRightString(page_width - 40, y, f'Total: ${tx.total_amount:.2f}')
+	y -= 16
+	pdf.setFont('Helvetica', 10)
+	pdf.drawRightString(page_width - 40, y, f'Paid: ${tx.amount_paid:.2f}')
+	y -= 16
+	pdf.drawRightString(page_width - 40, y, f'Change: ${tx.change_due:.2f}')
+
+	pdf.showPage()
+	pdf.save()
+	buffer.seek(0)
+
+	response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+	response['Content-Disposition'] = f'attachment; filename="receipt_{tx.id}.pdf"'
+	return response
 
 
 @login_required

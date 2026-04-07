@@ -1,0 +1,134 @@
+{% extends 'core/base.html' %}
+{% block title %}Reports Dashboard | POS{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+    <h1 class="text-4xl font-semibold">Reports Dashboard</h1>
+</div>
+
+<p class="text-sm text-slate-600 mb-4">Period: {{ start_date }} to {{ end_date }}</p>
+
+<form method="get" class="bg-white rounded-2xl shadow p-4 mb-6 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+    <div>
+        <label class="block text-xs text-slate-600 mb-1">From</label>
+        <input type="date" name="from_date" value="{{ from_date_value }}" class="w-full rounded border px-3 py-2 text-sm">
+    </div>
+    <div>
+        <label class="block text-xs text-slate-600 mb-1">To</label>
+        <input type="date" name="to_date" value="{{ to_date_value }}" class="w-full rounded border px-3 py-2 text-sm">
+    </div>
+    <div>
+        <button class="w-full bg-blue-600 text-white rounded px-4 py-2 text-sm hover:bg-blue-500">Apply Filter</button>
+    </div>
+    <div>
+        <a href="?" class="block w-full text-center bg-slate-200 text-slate-800 rounded px-4 py-2 text-sm hover:bg-slate-300">Clear Dates</a>
+    </div>
+</form>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-2xl shadow p-5">
+        <p class="text-slate-500 text-sm mb-2">Total Sales</p>
+        <p class="text-3xl font-bold">$ {{ total_sales }}</p>
+    </div>
+    <div class="bg-white rounded-2xl shadow p-5">
+        <p class="text-slate-500 text-sm mb-2">Total Transactions</p>
+        <p class="text-3xl font-bold">{{ total_transactions }}</p>
+    </div>
+    <div class="bg-white rounded-2xl shadow p-5">
+        <p class="text-slate-500 text-sm mb-2">Profit</p>
+        <p class="text-3xl font-bold">$ {{ total_profit }}</p>
+    </div>
+    <div class="bg-white rounded-2xl shadow p-5">
+        <p class="text-slate-500 text-sm mb-2">Best-selling Item</p>
+        <p class="text-xl font-bold">{{ best_selling_item }}</p>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <div class="bg-white rounded-2xl shadow p-4">
+        <h2 class="text-xl font-semibold mb-3">Sales Over Time</h2>
+        <div class="h-64">
+            <canvas id="salesOverTimeChart"></canvas>
+        </div>
+    </div>
+    <div class="bg-white rounded-2xl shadow p-4">
+        <h2 class="text-xl font-semibold mb-3">Top Products</h2>
+        <div class="h-64">
+            <canvas id="topProductsChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="bg-white rounded-2xl shadow p-4">
+    <h2 class="text-xl font-semibold mb-3">Lowest-selling Products</h2>
+    <div class="h-56">
+        <canvas id="lowestProductsChart"></canvas>
+    </div>
+</div>
+
+{{ sales_labels|json_script:"sales-labels" }}
+{{ sales_values|json_script:"sales-values" }}
+{{ top_product_labels|json_script:"top-product-labels" }}
+{{ top_product_values|json_script:"top-product-values" }}
+{{ low_product_labels|json_script:"low-product-labels" }}
+{{ low_product_values|json_script:"low-product-values" }}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const salesLabels = JSON.parse(document.getElementById('sales-labels').textContent);
+    const salesValues = JSON.parse(document.getElementById('sales-values').textContent);
+    const topLabels = JSON.parse(document.getElementById('top-product-labels').textContent);
+    const topValues = JSON.parse(document.getElementById('top-product-values').textContent);
+    const lowLabels = JSON.parse(document.getElementById('low-product-labels').textContent);
+    const lowValues = JSON.parse(document.getElementById('low-product-values').textContent);
+
+    new Chart(document.getElementById('salesOverTimeChart'), {
+        type: 'line',
+        data: {
+            labels: salesLabels,
+            datasets: [{
+                label: 'Sales',
+                data: salesValues,
+                borderColor: '#2563eb',
+                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                fill: true,
+                tension: 0.2
+            }]
+        },
+        options: {responsive: true, maintainAspectRatio: false}
+    });
+
+    new Chart(document.getElementById('topProductsChart'), {
+        type: 'bar',
+        data: {
+            labels: topLabels,
+            datasets: [{
+                label: 'Units Sold',
+                data: topValues,
+                backgroundColor: '#16a34a'
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+
+    new Chart(document.getElementById('lowestProductsChart'), {
+        type: 'bar',
+        data: {
+            labels: lowLabels,
+            datasets: [{
+                label: 'Units Sold',
+                data: lowValues,
+                backgroundColor: '#f59e0b'
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+</script>
+{% endblock %}

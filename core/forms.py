@@ -13,9 +13,10 @@ class LoginForm(AuthenticationForm):
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
-        fields = ['name', 'buying_price', 'price', 'stock_quantity', 'low_stock_threshold']
+        fields = ['name', 'barcode', 'buying_price', 'price', 'stock_quantity', 'low_stock_threshold']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'w-full rounded border px-3 py-2'}),
+            'barcode': forms.TextInput(attrs={'class': 'w-full rounded border px-3 py-2', 'placeholder': 'Scan or type barcode'}),
             'buying_price': forms.NumberInput(attrs={'class': 'w-full rounded border px-3 py-2', 'step': '0.01'}),
             'price': forms.NumberInput(attrs={'class': 'w-full rounded border px-3 py-2', 'step': '0.01'}),
             'stock_quantity': forms.NumberInput(attrs={'class': 'w-full rounded border px-3 py-2', 'min': 0}),

@@ -1,0 +1,48 @@
+{% extends 'core/base.html' %}
+{% block title %}Receipt #{{ tx.id }} | POS{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto bg-white rounded-xl shadow p-6" id="receipt-area">
+    <div class="flex items-center justify-between mb-4">
+        <h1 class="text-2xl font-semibold">Receipt #{{ tx.id }}</h1>
+        <p class="text-sm text-slate-500">{{ tx.created_at|date:"Y-m-d H:i" }}</p>
+    </div>
+
+    <p class="text-sm text-slate-700 mb-1"><strong>Shop:</strong> {{ tx.client.business_name }}</p>
+    <p class="text-sm text-slate-700 mb-4"><strong>Cashier:</strong> {{ tx.seller.username }}</p>
+
+    <div class="overflow-x-auto mb-4">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b text-left">
+                    <th class="py-2">Item</th>
+                    <th class="py-2">Qty</th>
+                    <th class="py-2">Unit</th>
+                    <th class="py-2">Line Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in tx.items.all %}
+                    <tr class="border-b">
+                        <td class="py-2">{{ item.product_name }}</td>
+                        <td class="py-2">{{ item.quantity }}</td>
+                        <td class="py-2">$ {{ item.unit_price }}</td>
+                        <td class="py-2">$ {{ item.line_total }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="space-y-1 text-sm">
+        <p><strong>Total:</strong> $ {{ tx.total_amount }}</p>
+        <p><strong>Paid:</strong> $ {{ tx.amount_paid }}</p>
+        <p><strong>Change:</strong> $ {{ tx.change_due }}</p>
+    </div>
+</div>
+
+<div class="max-w-2xl mx-auto mt-4 flex flex-wrap gap-2">
+    <button onclick="window.print()" class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-500">Print</button>
+    <a href="{% url 'receipt_pdf' tx.id %}" class="px-4 py-2 rounded bg-slate-800 text-white hover:bg-slate-700">Download PDF</a>
+    <a href="{% url 'new_sale' %}" class="px-4 py-2 rounded bg-slate-200 text-slate-800 hover:bg-slate-300">Back to Sale</a>
+</div>
+{% endblock %}
