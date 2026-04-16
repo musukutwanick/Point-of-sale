@@ -21,11 +21,7 @@
         
         <div>
             <label for="{{ form.username.id_for_label }}" class="block text-sm font-medium mb-1">Username</label>
-            {% if user %}
-                <input type="text" class="w-full rounded border px-3 py-2 bg-slate-100" value="{{ form.username.value }}" disabled>
-            {% else %}
-                {{ form.username }}
-            {% endif %}
+            {{ form.username }}
             {% if form.username.errors %}
                 <p class="text-red-600 text-sm mt-1">{{ form.username.errors.0 }}</p>
             {% endif %}

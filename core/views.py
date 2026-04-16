@@ -992,7 +992,7 @@ def client_user_add(request, pk):
 @login_required
 @user_passes_test(is_system_admin, login_url='home')
 def client_user_edit(request, pk, user_id):
-	"""Edit a user's role for a client business"""
+	"""Edit a user's username and role for a client business"""
 	client = get_object_or_404(ClientBusiness, pk=pk)
 	user = get_object_or_404(User, id=user_id, profile__client=client)
 	profile = user.profile
@@ -1000,7 +1000,14 @@ def client_user_edit(request, pk, user_id):
 	form = UserManagementForm(request.POST or None, initial={'username': user.username, 'role': profile.role})
 	
 	if request.method == 'POST' and form.is_valid():
+		new_username = form.cleaned_data['username'].strip()
 		new_role = form.cleaned_data['role']
+
+		if User.objects.filter(username=new_username).exclude(id=user.id).exists():
+			form.add_error('username', 'This username already exists.')
+			return render(request, 'core/client_user_form.html', {'form': form, 'client': client, 'user': user, 'action': 'Edit User'})
+
+		user.username = new_username
 		
 		# Update groups and role
 		user.groups.clear()
@@ -1012,9 +1019,10 @@ def client_user_edit(request, pk, user_id):
 			profile.role = UserProfile.ROLE_CASHIER
 		
 		user.groups.add(group)
+		user.save()
 		profile.save()
 		
-		messages.success(request, f'User {user.username} role updated.')
+		messages.success(request, f'User {user.username} updated.')
 		return redirect('client_user_list', pk=client.id)
 	
 	return render(request, 'core/client_user_form.html', {'form': form, 'client': client, 'user': user, 'action': 'Edit User'})
