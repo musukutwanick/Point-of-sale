@@ -20,6 +20,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
 from .forms import (
+	AdminPasswordResetForm,
 	BackupExportForm,
 	CashierCreateForm,
 	ChangeCollectionForm,
@@ -31,6 +32,7 @@ from .forms import (
 	SaleAddItemForm,
 	SaleCheckoutForm,
 	TransactionFilterForm,
+	UserManagementForm,
 )
 from .models import ClientBusiness, Product, Transaction, TransactionItem, UserProfile
 
@@ -919,3 +921,140 @@ def backup_database(request):
 		form = BackupExportForm(initial={'from_date': today, 'to_date': today})
 
 	return render(request, 'core/backup.html', {'form': form})
+
+
+@login_required
+@user_passes_test(is_system_admin, login_url='home')
+def client_business_detail(request, pk):
+	"""Display business details and manage users for that business"""
+	client = get_object_or_404(ClientBusiness, pk=pk)
+	users = User.objects.filter(profile__client=client).select_related('profile')
+	
+	context = {
+		'client': client,
+		'users': users,
+	}
+	return render(request, 'core/client_business_detail.html', context)
+
+
+@login_required
+@user_passes_test(is_system_admin, login_url='home')
+def client_user_list(request, pk):
+	"""List all users for a specific client business"""
+	client = get_object_or_404(ClientBusiness, pk=pk)
+	users = User.objects.filter(profile__client=client).select_related('profile').order_by('username')
+	
+	context = {
+		'client': client,
+		'users': users,
+	}
+	return render(request, 'core/client_user_list.html', context)
+
+
+@login_required
+@user_passes_test(is_system_admin, login_url='home')
+def client_user_add(request, pk):
+	"""Add a new user to a client business"""
+	client = get_object_or_404(ClientBusiness, pk=pk)
+	form = UserManagementForm(request.POST or None)
+	
+	if request.method == 'POST' and form.is_valid():
+		username = form.cleaned_data['username'].strip()
+		role = form.cleaned_data['role']
+		
+		if User.objects.filter(username=username).exists():
+			form.add_error('username', 'This username already exists.')
+		else:
+			# Create group if it doesn't exist
+			if role == 'admin':
+				group, _ = Group.objects.get_or_create(name='Admin')
+			else:
+				group, _ = Group.objects.get_or_create(name='Seller')
+			
+			# Create user with temporary password
+			temp_password = User.objects.make_random_password(length=10)
+			user = User.objects.create_user(username=username, password=temp_password)
+			user.groups.add(group)
+			
+			# Create user profile
+			profile, _ = UserProfile.objects.get_or_create(user=user)
+			profile.client = client
+			profile.role = UserProfile.ROLE_ADMIN if role == 'admin' else UserProfile.ROLE_CASHIER
+			profile.must_change_password = True
+			profile.save()
+			
+			messages.success(request, f'User {username} added to {client.business_name}. Temporary password: {temp_password}')
+			return redirect('client_user_list', pk=client.id)
+	
+	return render(request, 'core/client_user_form.html', {'form': form, 'client': client, 'action': 'Add User'})
+
+
+@login_required
+@user_passes_test(is_system_admin, login_url='home')
+def client_user_edit(request, pk, user_id):
+	"""Edit a user's role for a client business"""
+	client = get_object_or_404(ClientBusiness, pk=pk)
+	user = get_object_or_404(User, id=user_id, profile__client=client)
+	profile = user.profile
+	
+	form = UserManagementForm(request.POST or None, initial={'username': user.username, 'role': profile.role})
+	
+	if request.method == 'POST' and form.is_valid():
+		new_role = form.cleaned_data['role']
+		
+		# Update groups and role
+		user.groups.clear()
+		if new_role == 'admin':
+			group, _ = Group.objects.get_or_create(name='Admin')
+			profile.role = UserProfile.ROLE_ADMIN
+		else:
+			group, _ = Group.objects.get_or_create(name='Seller')
+			profile.role = UserProfile.ROLE_CASHIER
+		
+		user.groups.add(group)
+		profile.save()
+		
+		messages.success(request, f'User {user.username} role updated.')
+		return redirect('client_user_list', pk=client.id)
+	
+	return render(request, 'core/client_user_form.html', {'form': form, 'client': client, 'user': user, 'action': 'Edit User'})
+
+
+@login_required
+@user_passes_test(is_system_admin, login_url='home')
+def client_user_reset_password(request, pk, user_id):
+	"""Reset password for a user"""
+	client = get_object_or_404(ClientBusiness, pk=pk)
+	user = get_object_or_404(User, id=user_id, profile__client=client)
+	
+	form = AdminPasswordResetForm(request.POST or None)
+	
+	if request.method == 'POST' and form.is_valid():
+		password = form.cleaned_data['new_password1']
+		user.set_password(password)
+		user.save()
+		
+		# Set must_change_password flag
+		user.profile.must_change_password = True
+		user.profile.save()
+		
+		messages.success(request, f'Password reset for user {user.username}. New password: {password}')
+		return redirect('client_user_list', pk=client.id)
+	
+	return render(request, 'core/client_user_reset_password.html', {'form': form, 'client': client, 'user': user})
+
+
+@login_required
+@user_passes_test(is_system_admin, login_url='home')
+def client_user_delete(request, pk, user_id):
+	"""Delete a user from a client business"""
+	client = get_object_or_404(ClientBusiness, pk=pk)
+	user = get_object_or_404(User, id=user_id, profile__client=client)
+	
+	if request.method == 'POST':
+		username = user.username
+		user.delete()
+		messages.success(request, f'User {username} deleted.')
+		return redirect('client_user_list', pk=client.id)
+	
+	return render(request, 'core/client_user_confirm_delete.html', {'client': client, 'user': user})

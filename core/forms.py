@@ -127,3 +127,32 @@ class BackupExportForm(forms.Form):
         if from_date and to_date and from_date > to_date:
             raise forms.ValidationError('From date cannot be after To date.')
         return cleaned_data
+
+
+class AdminPasswordResetForm(forms.Form):
+    new_password1 = forms.CharField(
+        label='New Password',
+        widget=forms.PasswordInput(attrs={'class': 'w-full rounded border px-3 py-2'}),
+    )
+    new_password2 = forms.CharField(
+        label='Confirm Password',
+        widget=forms.PasswordInput(attrs={'class': 'w-full rounded border px-3 py-2'}),
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password1 = cleaned_data.get('new_password1')
+        password2 = cleaned_data.get('new_password2')
+        if password1 and password2 and password1 != password2:
+            raise forms.ValidationError('The passwords do not match.')
+        if password1 and len(password1) < 6:
+            raise forms.ValidationError('Password must be at least 6 characters long.')
+        return cleaned_data
+
+
+class UserManagementForm(forms.Form):
+    username = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'class': 'w-full rounded border px-3 py-2'}))
+    role = forms.ChoiceField(
+        choices=[('admin', 'Admin'), ('cashier', 'Cashier')],
+        widget=forms.Select(attrs={'class': 'w-full rounded border px-3 py-2'}),
+    )
